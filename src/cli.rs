@@ -1,42 +1,60 @@
-use clap::{crate_version, App, AppSettings, Arg, ArgMatches};
+use clap::{crate_version, App, AppSettings, Arg, ArgMatches, crate_authors};
 use std::path::Path;
 
 pub fn parse_arguments() -> ArgMatches<'static> {
-    App::new("Daemonizer")
-        .about("Daemonizer facilitates mangement of windows services by an abstraction over daemonizing an executable as a service process.")
-        .long_about("Daemonizer handles internal windows service control tasks such as communication with service control manager, orchestration, health check, and status information of the service itself. In Microsoft's terminology, Daemonizer will  be categorized as a Service Program.")
+    App::new(env!("CARGO_CRATE_NAME"))
+        .author(crate_authors!())
+        .about("Daemonizer facilitates management of daemon applications by creating a unified abstraction over service application on windows, launchd applications on macOS, and launchctl applications in Linux.")
         .version(crate_version!())
-        .usage("daemonize <name> <executable> [options] [-- <executable args>]")
+        .usage("daemonizer <command> <name> [options]")
         .global_settings(&[AppSettings::ColoredHelp])
-        .settings(&[AppSettings::ArgRequiredElseHelp])
-        .arg(
-            Arg::with_name("name")
-                .index(1)
-                .takes_value(true)
-                .required(true)
-                .help("Name of the service as registered within SCM datatbase.")
+        .subcommand(
+            App::new("install")
+                .about("Install an executable as a daemon application.")
+                .settings(&[AppSettings::ArgRequiredElseHelp])
+                .arg(
+                    Arg::with_name("name")
+                        .short("n")
+                        .long("name")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Name of the application to install as a daemon.")
+                )
+                .arg(
+                    Arg::with_name("executable")
+                        .short("e")
+                        .long("executable")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_file)
+                        .help("Absolute path to the executable file.")
+                )
+                .arg(
+                    Arg::with_name("log_dir")
+                        .short("l")
+                        .long("log-dir")
+                        .takes_value(true)
+                        .validator(is_dir)
+                        .help("Absolute path where to start rotating logging for service program.")
+                )
+                .arg(
+                    Arg::with_name("executable_args")
+                        .required(false)
+                        .raw(true)
+                        .last(true)
+                        .help("Use `--` separator provide nested arguments to be passed to the daemonized executable.")
+                )
         )
-        .arg(
-            Arg::with_name("executable")
-                .index(2)
-                .takes_value(true)
-                .required(true)
-                .validator(is_file)
-                .help("Absolute path to the executable file.")
-        )
-        .arg(
-            Arg::with_name("log_dir")
-                .short("l")
-                .long("log-dir")
-                .takes_value(true)
-                .validator(is_dir)
-                .help("Absolute path where to start rotating logging for service program.")
-        )
-        .arg(
-            Arg::with_name("executable_args")
-                .raw(true)
-                .last(true)
-                .help("Use `--` separator provide nested arguments to be passed to the daemonized executable.")
+        .subcommand(
+            App::new("run")
+                .about("This command is used internally by Daemonizer in order to spawn the executable as a child process while handling service's lifecycle.")
+                .arg(
+                    Arg::with_name("name")
+                        .index(1)
+                        .takes_value(true)
+                        .required(true)
+                        .help("Name of the service as registered within SCM datatbase.")
+                )
         )
         .get_matches()
 }

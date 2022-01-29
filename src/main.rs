@@ -1,13 +1,27 @@
 use ::daemonizer::{
-    cli::parse_arguments,
+    cli,
     daemonize,
     misc::{err_from_str, initialize_logger, Result},
 };
 use std::{ffi::OsString, path::Path};
 
 fn main() -> Result<()> {
-    let cli_matches = parse_arguments();
+    let cli_matches = cli::parse_arguments();
     let _log_handle = initialize_logger(cli_matches.value_of("log_dir").map(|ps| Path::new(ps)))?;
+
+    let result = match cli_matches.subcommand() {
+        ("install", Some(m)) => {
+
+        },
+        ("status", Some(m)) => {
+            println!("TODO");
+        },
+        ("uninstall", Some(m)) => {
+            println!("TODO");
+        },
+        ("run", Some(m)) => {},
+        _ => unreachable!(),
+    };
 
     let service_name = cli_matches
         .value_of("name")
