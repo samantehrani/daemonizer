@@ -32,7 +32,7 @@ pub fn initialize_logger(log_dir: Option<&Path>) -> Result<LoggerHandle, FlexiLo
             .format_for_files(colored_opt_format),
         _ => logger.log_target(LogTarget::StdOut),
     };
-    logger.log_target(LogTarget::StdOut).start()
+    logger.start()
 }
 
 lazy_static! {

@@ -60,13 +60,13 @@ fn event_handler_cb(
 // /// -   spawns a new th  read to responde to Windows Service Manager events
 fn main_function(args: Vec<OsString>) -> Result<(), String> {
     let name = args.get(0);
+    debug!("in service main");
+    // TODO: figure out why this doesn't work
+    // debug!("{:?}", args);
+    // work around
+    let daemonizer_args = get_args();
 
-    // TODO: make this dynamix this based on env var or input args, or lazy_static mut thread-safe var
-    debug!("{:?}", args);
-    // debug!("{:?}", executable_path);
-    let executable_args = get_args();
-
-    debug!("{:?}", executable_args);
+    debug!("{:?}", daemonizer_args);
     // comm. channel for ServiceEventHandler thread <-> main thread
     let (ctrl_tx, ctrl_rx) = channel::<ServiceControl>();
 
@@ -147,7 +147,7 @@ pub fn daemonize(service_name: &str, executable: &Path, arguments: Vec<OsString>
         "Bootstraping Service {:?}. Executable: {:?}. Arguments: {:?}",
         service_name, executable, arguments
     );
-    //push_args(arguments);
+    push_args(arguments);
     define_windows_service!(system_service_callback, main_function);
     service_dispatcher::start(service_name, system_service_callback)
         .map_err(|e| err_from_str!("{:?}", e))
@@ -160,8 +160,15 @@ pub fn install(service_name: &str, executable: &Path, arguments: Vec<OsString>) 
     let service_manager = ServiceManager::local_computer(None::<&str>, manager_access)?;
 
     let daemonizer_binary_path = ::std::env::current_exe().unwrap();
-    let arguments = vec![OsString::from("run"), OsString::from(service_name)];
-
+    println!("{:?}", daemonizer_binary_path);
+    let mut args = vec![
+        OsString::from("run"),
+        OsString::from("-n"), OsString::from(service_name),
+        OsString::from("-e"), OsString::from(executable.as_os_str()),
+        OsString::from("--"),
+    ];
+    args.extend(arguments.iter().map(|v| v.clone()));
+    println!("{:?}", args);
     let service_info = ServiceInfo {
         name: OsString::from(service_name),
         display_name: OsString::from(service_name),
@@ -169,7 +176,7 @@ pub fn install(service_name: &str, executable: &Path, arguments: Vec<OsString>) 
         start_type: ServiceStartType::AutoStart, // TODO: optional start type
         error_control: ServiceErrorControl::Normal, // TODO: optional error control input
         executable_path: daemonizer_binary_path,
-        launch_arguments: arguments,
+        launch_arguments: args,
         dependencies: vec![], // TODO: check out what this does
         account_name: None, // TODO: need these in run as user mode
         account_password: None,
