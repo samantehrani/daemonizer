@@ -1,11 +1,10 @@
 use log::*;
 use crate::misc::{err_from_str, Result, IS_DEBUG};
-use std::sync::{Arc, RwLock};
 use std::{
+    process::Command,
     ffi::OsString,
-    path::{Path, PathBuf},
+    path::{Path},
     sync::mpsc::{channel, Sender},
-    thread,
     time::{Duration, SystemTime},
 };
 use windows_service::{
@@ -18,7 +17,7 @@ use windows_service::{
     service_dispatcher,
     service_manager::{ServiceManager, ServiceManagerAccess},
 };
-
+use win32job::{Job};
 
 pub fn get_args() -> Vec<OsString> {
     match IS_DEBUG.clone().read() {
@@ -58,7 +57,7 @@ fn event_handler_cb(
 // /// this method is service's main thread. It:
 // /// -   checks for update process
 // /// -   spawns a new th  read to responde to Windows Service Manager events
-fn main_function(args: Vec<OsString>) -> Result<(), String> {
+fn main_function(args: Vec<OsString>) -> Result<(), Box<dyn std::error::Error>> {
     let name = args.get(0);
     debug!("in service main");
     // TODO: figure out why this doesn't work
@@ -83,8 +82,46 @@ fn main_function(args: Vec<OsString>) -> Result<(), String> {
         "failed to create handle"
     })?;
 
-    // run executable and get the process id
+    // create job group, assign current process and set children to terminate upon termination.
+    // https://docs.microsoft.com/en-us/windows/win32/procthread/job-objects
 
+    let job = Job::create()?;
+    let mut info = job.query_extended_limit_info()?;
+
+    info.limit_kill_on_job_close();
+
+    job.set_extended_limit_info(&mut info)?;
+    job.assign_current_process()?;
+
+    // run executable and get the process id
+    let mut p = Command::new("C:\\Program Files\\Mozilla Firefox\\firefox.exe");
+
+    use std::os::windows::process::CommandExt;
+
+    p.creation_flags(winapi::um::winbase::CREATE_NEW_CONSOLE | winapi::um::winbase::DETACHED_PROCESS);
+    let result = p.spawn();
+
+    let child;
+    if result.is_err() {
+        debug!("{:?}", result.err());
+        r_handle
+        .set_service_status(ServiceStatus {
+            service_type: ServiceType::OWN_PROCESS,
+            current_state: ServiceState::Stopped,
+            controls_accepted: ServiceControlAccept::empty(),
+            exit_code: ServiceExitCode::Win32(0),
+            checkpoint: 0, // must be zero since service does not implement pending start, stop, pause.
+            wait_hint: std::time::Duration::from_secs(0),
+            process_id: Some(std::process::id()),
+        })
+        .map_err(|e| {
+            error!("{:?}", e);
+            "failed to set service status stopped"
+        })?;
+        return Ok(());
+    } else {
+        child = result?;
+    }
 
     r_handle
         .set_service_status(ServiceStatus {
@@ -111,7 +148,7 @@ fn main_function(args: Vec<OsString>) -> Result<(), String> {
             Err(_) => match last_update_time.elapsed() {
                 Ok(d) if d > Duration::from_secs(2) => {
                     last_update_time = SystemTime::now();
-                    info!("Checking for update!");
+                    debug!("{:?}", child.id());
                 }
                 Ok(_) => continue,
                 Err(e) => {
@@ -181,7 +218,7 @@ pub fn install(service_name: &str, executable: &Path, arguments: Vec<OsString>) 
         account_name: None, // TODO: need these in run as user mode
         account_password: None,
     };
-    let service = service_manager.create_service(&service_info, ServiceAccess::CHANGE_CONFIG)?;
+    let _service = service_manager.create_service(&service_info, ServiceAccess::CHANGE_CONFIG)?;
 
     Ok(())
 }

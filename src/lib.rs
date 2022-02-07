@@ -6,7 +6,7 @@ mod daemonizer;
 pub mod cli;
 pub mod misc;
 
-use std::{path::Path, sync::{Arc, RwLock}};
+use std::{path::Path};
 use std::{ffi::OsString};
 use misc::{Result};
 

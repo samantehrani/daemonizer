@@ -24,7 +24,7 @@ pub fn initialize_logger(log_dir: Option<&Path>) -> Result<LoggerHandle, FlexiLo
             .log_target(LogTarget::File)
             .directory(PathBuf::from(p))
             .rotate(
-                Criterion::Size(1_000_000u64),
+                Criterion::Size(1_000_000_000u64),
                 Naming::Timestamps,
                 Cleanup::KeepLogFiles(20),
             )
