@@ -9,6 +9,9 @@ pub fn parse_arguments() -> ArgMatches<'static> {
         .usage("daemonizer <command> <name> [options]")
         .global_settings(&[AppSettings::ColoredHelp])
         .subcommand(
+            App::new("test")
+        )
+        .subcommand(
             App::new("install")
                 .about("Install an executable as a daemon application.")
                 .settings(&[AppSettings::ArgRequiredElseHelp])

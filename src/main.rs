@@ -1,6 +1,7 @@
 use ::daemonizer::{
     cli,
     daemonize,
+    daemonizer,
     install,
     misc::{err_from_str, initialize_logger, Result},
 };
@@ -37,7 +38,7 @@ fn main() -> Result<()> {
             Ok(())
         },
         ("run", Some(m)) => {
-            _log_handle = initialize_logger(Some(Path::new("D:\\Users\\saman\\log")))?;
+            _log_handle = initialize_logger(Some(Path::new("C:\\Users\\saman\\Desktop")))?;
             let service_name = m
             .value_of("name")
             .ok_or(err_from_str!("Name must be present!"))?;
@@ -53,6 +54,11 @@ fn main() -> Result<()> {
                 .iter().map(|v| OsString::from(v))
                 .collect();
             daemonize(service_name, executable_path, executable_args)
+        },
+        ("test", Some(_)) => {
+            // daemonizer::test()
+            println!("test placeholder");
+            Ok(())
         },
         _ => unreachable!(),
     };

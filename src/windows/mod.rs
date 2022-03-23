@@ -1,3 +1,5 @@
+
+use std::ffi::OsStr;
 use log::*;
 use crate::misc::{err_from_str, Result, IS_DEBUG};
 use std::{
@@ -18,6 +20,8 @@ use windows_service::{
     service_manager::{ServiceManager, ServiceManagerAccess},
 };
 use win32job::{Job};
+
+mod child;
 
 pub fn get_args() -> Vec<OsString> {
     match IS_DEBUG.clone().read() {
@@ -64,7 +68,7 @@ fn main_function(args: Vec<OsString>) -> Result<(), Box<dyn std::error::Error>> 
     // debug!("{:?}", args);
     // work around
     let daemonizer_args = get_args();
-
+    let executable_path = &daemonizer_args[0];
     debug!("{:?}", daemonizer_args);
     // comm. channel for ServiceEventHandler thread <-> main thread
     let (ctrl_tx, ctrl_rx) = channel::<ServiceControl>();
@@ -72,8 +76,8 @@ fn main_function(args: Vec<OsString>) -> Result<(), Box<dyn std::error::Error>> 
     // register event handlers and set running status
     let r_handle = service_control_handler::register(
         name.ok_or_else(|| {
-            error!("name not provided uin service entry arguments");
-            "name not provided uin service entry arguments"
+            error!("name not provided in service entry arguments");
+            "name not provided in service entry arguments"
         })?,
         move |e| event_handler_cb(e, &ctrl_tx),
     )
@@ -93,15 +97,9 @@ fn main_function(args: Vec<OsString>) -> Result<(), Box<dyn std::error::Error>> 
     job.set_extended_limit_info(&mut info)?;
     job.assign_current_process()?;
 
-    // run executable and get the process id
-    let mut p = Command::new("C:\\Program Files\\Mozilla Firefox\\firefox.exe");
+    // spawn the executable as a child process
+    let mut result = child::spawn_child_process(executable_path);
 
-    use std::os::windows::process::CommandExt;
-
-    p.creation_flags(winapi::um::winbase::CREATE_NEW_CONSOLE | winapi::um::winbase::DETACHED_PROCESS);
-    let result = p.spawn();
-
-    let child;
     if result.is_err() {
         debug!("{:?}", result.err());
         r_handle
@@ -119,10 +117,8 @@ fn main_function(args: Vec<OsString>) -> Result<(), Box<dyn std::error::Error>> 
             "failed to set service status stopped"
         })?;
         return Ok(());
-    } else {
-        child = result?;
     }
-
+    let child = result?;
     r_handle
         .set_service_status(ServiceStatus {
             service_type: ServiceType::OWN_PROCESS,
@@ -148,7 +144,7 @@ fn main_function(args: Vec<OsString>) -> Result<(), Box<dyn std::error::Error>> 
             Err(_) => match last_update_time.elapsed() {
                 Ok(d) if d > Duration::from_secs(2) => {
                     last_update_time = SystemTime::now();
-                    debug!("{:?}", child.id());
+                    debug!("{:?}", child.dwProcessId);
                 }
                 Ok(_) => continue,
                 Err(e) => {
@@ -184,7 +180,10 @@ pub fn daemonize(service_name: &str, executable: &Path, arguments: Vec<OsString>
         "Bootstraping Service {:?}. Executable: {:?}. Arguments: {:?}",
         service_name, executable, arguments
     );
-    push_args(arguments);
+    let mut args = vec![executable.as_os_str().to_owned()];
+    args.extend(arguments);
+
+    push_args(args);
     define_windows_service!(system_service_callback, main_function);
     service_dispatcher::start(service_name, system_service_callback)
         .map_err(|e| err_from_str!("{:?}", e))
